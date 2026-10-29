@@ -33,7 +33,7 @@ def main():
                      model_cfg["num_heads"], model_cfg["dim_feedforward"]).to(device)
     print("Trainable params:", sum(p.numel() for p in head.parameters()))
 
-    optimizer = torch.optim.Adam(head.parameters(), lr=train_cfg["lr"], weight_decay=train_cfg["weight_decay"])
+    optimizer = torch.optim.Adam(head.parameters(), lr=train_cfg["lr"], weight_decay=train_cfg["weight_decay"], fused=True)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.7, patience=5, threshold=0.01, min_lr=1e-5)
     generator = make_generator(cfg["seed"])

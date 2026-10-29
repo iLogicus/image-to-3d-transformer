@@ -11,9 +11,18 @@ def nearest_dist(pred, gt):
 
 def chamfer_loss(pred, gt):
     # Same as chamferdist.ChamferDistance(bidirectional=True) in official train.py:
-    # squared distance, sum over points, mean over batch
-    d1, d2 = nearest_dist(pred, gt)
-    return (d1.pow(2).sum(1) + d2.pow(2).sum(1)).mean()
+    # squared distance, sum over points, mean over batch.
+    # Find the nearest neighbours without gradient (fast), then compute the distance of matched pairs.
+    pred, gt = pred.float(), gt.float()
+    with torch.no_grad():
+        d = torch.cdist(pred, gt)
+        idx1 = d.argmin(2)  # nearest gt point of each pred point
+        idx2 = d.argmin(1)  # nearest pred point of each gt point
+    gt_near = torch.stack([gt[b][idx1[b]] for b in range(len(gt))])
+    pred_near = torch.stack([pred[b][idx2[b]] for b in range(len(pred))])
+    d1 = ((pred - gt_near) ** 2).sum(2)
+    d2 = ((gt - pred_near) ** 2).sum(2)
+    return (d1.sum(1) + d2.sum(1)).mean()
 
 
 def chamfer_fscore(pred, gt, threshold=0.01):
