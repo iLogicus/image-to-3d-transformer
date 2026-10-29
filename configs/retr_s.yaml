@@ -1,0 +1,40 @@
+seed: 0
+
+data:
+  image_root: data/raw/ShapeNetRendering
+  voxel_root: data/raw/ShapeNetVox32
+  split: data/ShapeNet.json
+  classes: [car, airplane, chair]
+  image_size: 224
+  crop_size: 128
+  background: 240
+  batch_size: 16
+  num_workers: 2
+  view_num: 1
+  val_view: 0
+
+model:
+  name: retr_s
+  encoder: deit_tiny_distilled_patch16_224
+  encoder_dropout: 0.4
+  decoder_depth: 6
+  decoder_heads: 3
+  decoder_dim: 192
+  decoder_dropout: 0.4
+  patch_num: 4
+  voxel_size: 32
+  num_cnn_layers: 3
+  num_resnet_blocks: 2
+  threshold: 0.5
+
+train:
+  epochs: 100
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  sched_factor: 1.0
+  loss: dice
+  amp: bf16
+  select_by: val_iou
+
+output_dir: outputs/retr_s

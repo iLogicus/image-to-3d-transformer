@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Data and outputs
+data/raw
+data/processed
+outputs
+*.pt
+*.pth
+*.ckpt
+
+# Gradio
+.gradio/
+
+# Local reference papers and notes
+docs/
+
+# Claude Code notes
+CLAUDE.md
