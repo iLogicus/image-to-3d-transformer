@@ -5,7 +5,7 @@ import time
 
 import torch
 
-from dataset.shapenet import CLASS_NAMES, ImageDataset, load_cache
+from dataset.shapenet import CLASS_NAMES, ImageDataset, drop_objects, load_cache
 from metrics import evaluate_head
 from models.rgb2point import build_model
 from utils import get_device, load_config, set_seed
@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--split", default="test")
     parser.add_argument("--official", action="store_true", help="ckpt is the authors' pc1024_three.pth")
+    parser.add_argument("--exclude", default=None, help="txt of objects to leave out (e.g. the authors' train list)")
     parser.add_argument("--name", default="test_results", help="name of the output json")
     args = parser.parse_args()
 
@@ -52,6 +53,8 @@ def main():
 
     # Accuracy on cached features (same ViT output as running the full model)
     test_data = load_cache(data_cfg, args.split, device)
+    if args.exclude:
+        test_data = drop_objects(test_data, args.exclude)
     results = evaluate_head(model.head, test_data, with_emd=True)
     del test_data
     torch.cuda.empty_cache()

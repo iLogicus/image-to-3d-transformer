@@ -98,4 +98,17 @@ def load_cache(data_cfg, stage, device):
         "obj_index": cache["obj_index"].to(device),                # (num_images,)
         "points": load_points(data_cfg, cache["objects"]).to(device),  # (num_objects, 1024, 3)
         "class_ids": [c for c, _ in cache["objects"]],
+        "objects": cache["objects"],
     }
+
+
+def drop_objects(cache, exclude_file):
+    # Keep only images whose object is NOT listed in exclude_file (lines "class_id/object_id")
+    with open(exclude_file) as f:
+        exclude = {tuple(line.strip().split("/")) for line in f}
+    keep_obj = torch.tensor([tuple(o) not in exclude for o in cache["objects"]], device=cache["obj_index"].device)
+    keep = keep_obj[cache["obj_index"]]
+    cache["features"] = cache["features"][keep]
+    cache["obj_index"] = cache["obj_index"][keep]
+    print(f"Kept {keep.sum().item()} / {len(keep)} images (dropped objects in {exclude_file})")
+    return cache
