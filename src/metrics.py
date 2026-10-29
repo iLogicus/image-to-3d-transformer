@@ -51,11 +51,12 @@ def emd(pred, gt):
 def evaluate_head(head, cache, batch_size=256, with_emd=False):
     # Per-sample metrics, then the mean per class and the mean over classes (as the paper)
     head.eval()
+    device = next(head.parameters()).device
     metrics = {"cd": [], "fscore": [], "emd": []}
     n = len(cache["features"])
     for i in range(0, n, batch_size):
-        pred = head(cache["features"][i:i + batch_size])
-        gt = cache["points"][cache["obj_index"][i:i + batch_size]]
+        pred = head(cache["features"][i:i + batch_size].to(device).float())
+        gt = cache["points"][cache["obj_index"][i:i + batch_size].to(device)]
         cd, f = chamfer_fscore(pred, gt)
         metrics["cd"].append(cd.cpu())
         metrics["fscore"].append(f.cpu())

@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset.shapenet import ImageDataset, feature_path
+from models.rgb2point import image_tokens
 from utils import get_device, load_config, set_seed
 
 
@@ -32,14 +33,19 @@ def main():
             continue
         dataset = ImageDataset(data_cfg, stage)
         loader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=data_cfg["num_workers"])
-        features, obj_index = [], []
+        features, obj_index = None, []
+        start = 0
         for images, idx in tqdm(loader, desc=stage):
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                feat = vit(images.to(device))
-            features.append(feat.half().cpu())
+                feat = image_tokens(vit, images.to(device), cfg["model"]["tokens"]).half().cpu()
+            if features is None:
+                # V1 features are large (about 18 GB for train), so fill one tensor instead of a list
+                features = torch.empty((len(dataset),) + feat.shape[1:], dtype=torch.float16)
+            features[start:start + len(feat)] = feat
+            start += len(feat)
             obj_index.append(idx)
         torch.save({
-            "features": torch.cat(features),
+            "features": features,
             "obj_index": torch.cat(obj_index),
             "objects": dataset.objects,
         }, feature_path(data_cfg, stage))

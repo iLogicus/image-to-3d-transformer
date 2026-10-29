@@ -7,7 +7,7 @@ import torch
 
 from dataset.shapenet import load_cache
 from metrics import chamfer_loss, evaluate_head
-from models.rgb2point import PointHead
+from models.rgb2point import build_head
 from utils import get_device, load_config, make_generator, set_seed
 
 
@@ -29,8 +29,7 @@ def main():
     # Training uses cached ViT features (ViT is frozen), so only the head is trained
     train_data = load_cache(data_cfg, "train", device)
     val_data = load_cache(data_cfg, "val", device)
-    head = PointHead(train_data["features"].shape[1], data_cfg["num_points"],
-                     model_cfg["num_heads"], model_cfg["dim_feedforward"]).to(device)
+    head = build_head(model_cfg, train_data["features"].shape[-1], data_cfg["num_points"]).to(device)
     print("Trainable params:", sum(p.numel() for p in head.parameters()))
 
     optimizer = torch.optim.Adam(head.parameters(), lr=train_cfg["lr"], weight_decay=train_cfg["weight_decay"], fused=True)
@@ -56,11 +55,11 @@ def main():
         t0 = time.time()
         head.train()
         total_loss, steps = 0.0, 0
-        perm = torch.randperm(num_train, generator=generator).to(device)
+        perm = torch.randperm(num_train, generator=generator)
         for i in range(0, num_train - batch_size + 1, batch_size):  # drop_last=True
             idx = perm[i:i + batch_size]
-            feat = train_data["features"][idx]
-            gt = train_data["points"][train_data["obj_index"][idx]]
+            feat = train_data["features"][idx].to(device).float()
+            gt = train_data["points"][train_data["obj_index"][idx].to(device)]
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 pred = head(feat)
             loss = chamfer_loss(pred, gt) * train_cfg["loss_scale"]

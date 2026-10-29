@@ -56,16 +56,27 @@ def train_views(data_cfg, class_id, obj):
     return range(len([f for f in os.listdir(folder) if f.endswith(".png")]))
 
 
+def view_angles(data_cfg, class_id, obj):
+    # (azimuth, elevation) in degrees of each rendered view, from rendering_metadata.txt
+    folder = os.path.dirname(image_path(data_cfg, class_id, obj, 0))
+    with open(os.path.join(folder, "rendering_metadata.txt")) as f:
+        return [(float(line.split()[0]), float(line.split()[1])) for line in f if line.strip()]
+
+
 class ImageDataset(Dataset):
     # One sample = one rendered view of one object.
     # Train uses all views, val/test use only view 00 (as official code).
-    def __init__(self, data_cfg, stage):
+    # all_views=True uses every view also for val/test (for the error analysis).
+    def __init__(self, data_cfg, stage, all_views=False):
         self.data_cfg = data_cfg
         self.objects = []
         self.samples = []  # (object index, view)
         missing = 0
         for class_id, obj in read_split(data_cfg["split"], data_cfg["classes"], stage):
-            views = train_views(data_cfg, class_id, obj) if stage == "train" else [data_cfg["test_view"]]
+            if stage == "train" or all_views:
+                views = train_views(data_cfg, class_id, obj)
+            else:
+                views = [data_cfg["test_view"]]
             ok = len(views) > 0 and os.path.exists(points_path(data_cfg, class_id, obj)) and all(
                 os.path.exists(image_path(data_cfg, class_id, obj, v)) for v in views)
             if not ok:
@@ -91,11 +102,12 @@ def feature_path(data_cfg, stage):
 
 
 def load_cache(data_cfg, stage, device):
-    # Cached ViT features (from cache_features.py) + ground truth points, all on GPU
+    # Cached ViT features (from cache_features.py) stay on CPU in float16 (V1 train features are
+    # about 18 GB); each batch is moved to the GPU. Ground truth points go to the GPU.
     cache = torch.load(feature_path(data_cfg, stage))
     return {
-        "features": cache["features"].float().to(device),         # (num_images, 768)
-        "obj_index": cache["obj_index"].to(device),                # (num_images,)
+        "features": cache["features"],                             # (num_images, 768) or (num_images, 50, 768)
+        "obj_index": cache["obj_index"],                           # (num_images,)
         "points": load_points(data_cfg, cache["objects"]).to(device),  # (num_objects, 1024, 3)
         "class_ids": [c for c, _ in cache["objects"]],
         "objects": cache["objects"],
@@ -106,7 +118,7 @@ def drop_objects(cache, exclude_file):
     # Keep only images whose object is NOT listed in exclude_file (lines "class_id/object_id")
     with open(exclude_file) as f:
         exclude = {tuple(line.strip().split("/")) for line in f}
-    keep_obj = torch.tensor([tuple(o) not in exclude for o in cache["objects"]], device=cache["obj_index"].device)
+    keep_obj = torch.tensor([tuple(o) not in exclude for o in cache["objects"]])
     keep = keep_obj[cache["obj_index"]]
     cache["features"] = cache["features"][keep]
     cache["obj_index"] = cache["obj_index"][keep]
