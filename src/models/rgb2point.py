@@ -66,6 +66,23 @@ class QueryHead(nn.Module):
         x = self.decoder(queries, memory)                       # (B, 256, dim)
         return self.out(x).view(len(tokens), -1, 3)             # (B, 256 * 4, 3)
 
+    def attention_maps(self, tokens):
+        # Same computation as forward, written layer by layer, so we can also return
+        # the cross-attention weights (which image tokens each query looks at).
+        memory = self.input_proj(tokens) + self.token_pos
+        x = self.queries.expand(len(tokens), -1, -1)
+        maps = []
+        for layer in self.decoder.layers:
+            h = layer.norm1(x)
+            x = x + layer.self_attn(h, h, h)[0]
+            h = layer.norm2(x)
+            out, weights = layer.multihead_attn(h, memory, memory)  # weights: (B, 256, 50), mean over heads
+            x = x + out
+            x = x + layer.linear2(layer.activation(layer.linear1(layer.norm3(x))))
+            maps.append(weights)
+        points = self.out(self.decoder.norm(x)).view(len(tokens), -1, 3)
+        return points, maps
+
 
 def build_head(model_cfg, in_dim, num_points):
     if model_cfg["head"] == "query":
