@@ -1,0 +1,36 @@
+seed: 0
+
+data:
+  image_root: data/raw/ShapeNetRendering
+  points_root: data/raw/ShapeNet_pointclouds
+  feature_dir: data/processed/dinov2_pooled7
+  split: data/ShapeNet.json
+  classes: [car, airplane, chair]
+  image_size: 224
+  num_points: 1024
+  batch_size: 32
+  num_workers: 8
+  test_view: 0
+
+model:
+  name: v2_dinov2
+  backbone: vit_base_patch14_reg4_dinov2.lvd142m  # DINOv2 with 4 registers, frozen
+  tokens: pooled        # CLS + patch tokens pooled to 7 x 7 = 50 tokens
+  head: query           # Transformer decoder with learnable queries
+  num_queries: 256      # 256 queries x 4 points = 1024 points
+  dim: 256
+  num_layers: 4
+  num_heads: 8
+
+train:
+  epochs: 50            # about 3.5 min per epoch on L4 (official code: 1000)
+  optimizer: adam
+  lr: 1.0e-4
+  weight_decay: 0.0
+  grad_clip: 5.0
+  loss_scale: 5.0
+  scheduler: plateau
+  amp: bf16
+  select_by: val_cd
+
+output_dir: outputs/v2_dinov2

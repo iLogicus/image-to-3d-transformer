@@ -3,18 +3,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-POOL = 7  # V1: the 14 x 14 patch grid is average-pooled to 7 x 7
+POOL = 7  # V1: the patch grid (14 x 14, or 16 x 16 for DINOv2) is average-pooled to 7 x 7
+
+
+def create_backbone(name, pretrained=True):
+    # ViT-B/16 (baseline, V1) or DINOv2 ViT-B/14 (V2). Input is always 224 x 224.
+    return timm.create_model(name, pretrained=pretrained, num_classes=0, img_size=224)
 
 
 def image_tokens(vit, images, tokens):
     # "cls": only the CLS feature, as RGB2Point (B, 768)
     # "pooled": CLS + patch tokens pooled to 7 x 7, for V1 (B, 1 + 49, 768)
-    x = vit.forward_features(images)  # (B, 1 + 14*14, 768), x[:, 0] is the CLS token
+    x = vit.forward_features(images)  # (B, prefix + patches, 768), x[:, 0] is the CLS token
     if tokens == "cls":
         return x[:, 0]
-    cls, patches = x[:, :1], x[:, 1:]
-    side = int(patches.shape[1] ** 0.5)  # 14
-    grid = patches.transpose(1, 2).reshape(len(x), -1, side, side)  # (B, 768, 14, 14)
+    # DINOv2 with registers has 4 extra tokens after CLS: skip them
+    cls, patches = x[:, :1], x[:, vit.num_prefix_tokens:]
+    side = int(patches.shape[1] ** 0.5)  # 14 for ViT-B/16, 16 for DINOv2
+    grid = patches.transpose(1, 2).reshape(len(x), -1, side, side)  # (B, 768, side, side)
     grid = F.adaptive_avg_pool2d(grid, POOL)  # (B, 768, 7, 7)
     return torch.cat([cls, grid.flatten(2).transpose(1, 2)], dim=1)
 
@@ -97,7 +103,7 @@ class RGB2Point(nn.Module):
     def __init__(self, model_cfg, num_points, pretrained=True):
         super().__init__()
         self.tokens = model_cfg["tokens"]
-        self.vit = timm.create_model(model_cfg["backbone"], pretrained=pretrained, num_classes=0)
+        self.vit = create_backbone(model_cfg["backbone"], pretrained)
         for p in self.vit.parameters():
             p.requires_grad = False
         self.head = build_head(model_cfg, self.vit.num_features, num_points)

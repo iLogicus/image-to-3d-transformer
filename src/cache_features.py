@@ -1,13 +1,12 @@
 import argparse
 import os
 
-import timm
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset.shapenet import ImageDataset, feature_path
-from models.rgb2point import image_tokens
+from models.rgb2point import create_backbone, image_tokens
 from utils import get_device, load_config, set_seed
 
 
@@ -25,7 +24,7 @@ def main():
     data_cfg = cfg["data"]
     os.makedirs(data_cfg["feature_dir"], exist_ok=True)
 
-    vit = timm.create_model(cfg["model"]["backbone"], pretrained=True, num_classes=0).to(device).eval()
+    vit = create_backbone(cfg["model"]["backbone"]).to(device).eval()
 
     for stage in ["train", "val", "test"]:
         if os.path.exists(feature_path(data_cfg, stage)):
