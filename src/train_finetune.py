@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from dataset.shapenet import ImageDataset, load_points
 from metrics import chamfer_fscore, chamfer_loss
 from models.rgb2point import build_model, unfreeze_last_blocks
-from utils import get_device, load_config, make_generator, seed_worker, set_seed
+from utils import finished_run, get_device, load_config, make_generator, print_epoch, seed_worker, set_seed
 
 
 # V3: start from V2 (frozen DINOv2 + trained decoder), then train the last ViT blocks together
@@ -48,6 +48,8 @@ def main():
     epochs = args.epochs or train_cfg["epochs"]
     out_dir = cfg["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
+    if finished_run(out_dir, epochs):
+        return
 
     train_set = ImageDataset(data_cfg, "train", augment=True)
     val_set = ImageDataset(data_cfg, "val")
@@ -114,8 +116,7 @@ def main():
         }
         with open(os.path.join(out_dir, "log.jsonl"), "a") as f:
             f.write(json.dumps(log) + "\n")
-        print(f"Epoch {epoch + 1}/{epochs}  loss {log['train_loss']:.4f}  val CD {val_cd:.5f}  "
-              f"val F {log['val_fscore']:.4f}  lr {log['lr']:.1e}  {log['time_s']:.0f}s")
+        print_epoch(log, epochs)
 
         if val_cd < best_cd:
             best_cd = val_cd

@@ -8,7 +8,7 @@ import torch
 from dataset.shapenet import load_cache
 from metrics import chamfer_loss, evaluate_head
 from models.rgb2point import build_head
-from utils import get_device, load_config, make_generator, set_seed
+from utils import finished_run, get_device, load_config, make_generator, print_epoch, set_seed
 
 
 def main():
@@ -25,6 +25,8 @@ def main():
     epochs = args.epochs or train_cfg["epochs"]
     out_dir = cfg["output_dir"]
     os.makedirs(out_dir, exist_ok=True)
+    if finished_run(out_dir, epochs):
+        return
 
     # Training uses cached ViT features (ViT is frozen), so only the head is trained
     train_data = load_cache(data_cfg, "train", device)
@@ -85,8 +87,7 @@ def main():
         }
         with open(os.path.join(out_dir, "log.jsonl"), "a") as f:
             f.write(json.dumps(log) + "\n")
-        print(f"Epoch {epoch + 1}/{epochs}  loss {log['train_loss']:.4f}  val CD {val_cd:.5f}  "
-              f"val F {log['val_fscore']:.4f}  lr {log['lr']:.1e}  {log['time_s']:.0f}s")
+        print_epoch(log, epochs)
 
         if val_cd < best_cd:
             best_cd = val_cd
