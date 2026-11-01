@@ -34,6 +34,8 @@ def all_rotations():
 def choose_rotation(pix3d_points, shapenet_points):
     # Pix3D models use another axis convention than our ShapeNet data. Choose the rotation that
     # makes Pix3D chairs closest to ShapeNet chairs (ground truth only, no model involved).
+    # 256 of the 1024 points are enough to compare the axes, and much faster.
+    pix3d_points, shapenet_points = pix3d_points[:, ::4], shapenet_points[:, ::4]
     best, best_cd = None, float("inf")
     for r in all_rotations():
         rotated = pix3d_points @ torch.tensor(r, device=pix3d_points.device).T
@@ -91,7 +93,7 @@ def main():
     points = torch.from_numpy(np.stack([np.load(p) for p in models])).float()
     points = points - points.mean(1, keepdim=True)
     shapenet_chairs = load_points(data_cfg, read_split(data_cfg["split"], ["chair"], "train")[:300])
-    rotation = choose_rotation(points[:100].to(device), shapenet_chairs.to(device))
+    rotation = choose_rotation(points[:50].to(device), shapenet_chairs.to(device))
     points = points.to(device) @ rotation.to(device).T
     model_index = {p: i for i, p in enumerate(models)}
 
