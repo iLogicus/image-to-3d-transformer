@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset.shapenet import ImageDataset, feature_path
+from evaluate import load_vit
 from models.rgb2point import create_backbone, image_tokens
 from utils import get_device, load_config, set_seed
 
@@ -16,6 +17,8 @@ from utils import get_device, load_config, set_seed
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
+    parser.add_argument("--ckpt", default=None, help="V3: checkpoint with the fine-tuned ViT")
+    parser.add_argument("--stages", nargs="+", default=["train", "val", "test"])
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -24,9 +27,12 @@ def main():
     data_cfg = cfg["data"]
     os.makedirs(data_cfg["feature_dir"], exist_ok=True)
 
-    vit = create_backbone(cfg["model"]["backbone"]).to(device).eval()
+    vit = create_backbone(cfg["model"]["backbone"])
+    if args.ckpt:
+        load_vit(vit, args.ckpt)
+    vit = vit.to(device).eval()
 
-    for stage in ["train", "val", "test"]:
+    for stage in args.stages:
         if os.path.exists(feature_path(data_cfg, stage)):
             print(f"[{stage}] already cached")
             continue

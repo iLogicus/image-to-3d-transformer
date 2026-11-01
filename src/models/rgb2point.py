@@ -98,8 +98,16 @@ def build_head(model_cfg, in_dim, num_points):
                      use_attention=model_cfg["head"] == "rgb2point")
 
 
+def unfreeze_last_blocks(vit, num_blocks):
+    # V3: train the last ViT blocks and the final norm, the other blocks stay frozen
+    params = list(vit.blocks[-num_blocks:].parameters()) + list(vit.norm.parameters())
+    for p in params:
+        p.requires_grad = True
+    return params
+
+
 class RGB2Point(nn.Module):
-    # Full model (frozen ViT + trainable head), used for inference and timing
+    # Full model (ViT + head), used for inference, timing and V3 fine-tuning. The ViT starts frozen.
     def __init__(self, model_cfg, num_points, pretrained=True):
         super().__init__()
         self.tokens = model_cfg["tokens"]
@@ -109,8 +117,8 @@ class RGB2Point(nn.Module):
         self.head = build_head(model_cfg, self.vit.num_features, num_points)
 
     def forward(self, images):
-        with torch.no_grad():
-            feat = image_tokens(self.vit, images, self.tokens)
+        # No torch.no_grad() here: V3 fine-tunes the last ViT blocks. Frozen blocks build no graph.
+        feat = image_tokens(self.vit, images, self.tokens)
         return self.head(feat)
 
 

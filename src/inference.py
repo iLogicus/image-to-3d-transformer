@@ -11,7 +11,10 @@ from utils import get_device, load_config
 
 def load_model(cfg, ckpt_path, device):
     model = build_model(cfg["model"], cfg["data"]["num_points"]).to(device).eval()
-    model.head.load_state_dict(torch.load(ckpt_path, map_location=device)["head"])
+    ckpt = torch.load(ckpt_path, map_location=device)
+    model.head.load_state_dict(ckpt["head"])
+    if "vit" in ckpt:  # V3: fine-tuned ViT
+        model.vit.load_state_dict(ckpt["vit"])
     return model
 
 

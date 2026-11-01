@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset.shapenet import CLASS_NAMES, ImageDataset, load_points, view_angles
-from evaluate import load_head
+from evaluate import load_head, load_vit
 from metrics import chamfer_fscore
 from models.rgb2point import build_model
 from utils import get_device, load_config, set_seed
@@ -31,6 +31,7 @@ def main():
 
     model = build_model(cfg["model"], data_cfg["num_points"]).to(device).eval()
     load_head(model.head, args.ckpt, args.official)
+    load_vit(model.vit, args.ckpt)
 
     dataset = ImageDataset(data_cfg, args.split, all_views=True)
     points = load_points(data_cfg, dataset.objects).to(device)

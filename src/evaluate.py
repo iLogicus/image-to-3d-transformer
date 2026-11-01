@@ -7,7 +7,7 @@ import torch
 
 from dataset.shapenet import CLASS_NAMES, ImageDataset, drop_objects, load_cache
 from metrics import evaluate_head
-from models.rgb2point import build_model
+from models.rgb2point import build_model, unfreeze_last_blocks
 from utils import get_device, load_config, set_seed
 
 # Layer names in the official checkpoint (model.py of RGB2point) -> names in our PointHead
@@ -33,6 +33,14 @@ def load_head(head, ckpt_path, official):
     print("Loaded official RGB2Point weights")
 
 
+def load_vit(vit, ckpt_path):
+    # V3 checkpoints also store the fine-tuned ViT; other checkpoints keep the pretrained ViT
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    if "vit" in ckpt:
+        vit.load_state_dict(ckpt["vit"])
+        print("Loaded fine-tuned ViT")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -50,8 +58,9 @@ def main():
 
     model = build_model(cfg["model"], data_cfg["num_points"]).to(device).eval()
     load_head(model.head, args.ckpt, args.official)
+    load_vit(model.vit, args.ckpt)
 
-    # Accuracy on cached features (same ViT output as running the full model)
+    # Accuracy on cached features (for V3: features of the fine-tuned ViT) (same ViT output as running the full model)
     test_data = load_cache(data_cfg, args.split, device)
     if args.exclude:
         test_data = drop_objects(test_data, args.exclude)
@@ -65,7 +74,10 @@ def main():
 
     # Model size
     results["params_total"] = sum(p.numel() for p in model.parameters())
-    results["params_trainable"] = sum(p.numel() for p in model.head.parameters())
+    trainable = list(model.head.parameters())
+    if cfg["model"].get("finetune_blocks", 0) > 0:
+        trainable += unfreeze_last_blocks(model.vit, cfg["model"]["finetune_blocks"])
+    results["params_trainable"] = sum(p.numel() for p in trainable)
 
     # Inference time of the full model (image -> points), batch 1, 200 images
     dataset = ImageDataset(data_cfg, args.split)
