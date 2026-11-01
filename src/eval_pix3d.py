@@ -6,6 +6,8 @@ import os
 import numpy as np
 import torch
 from PIL import Image
+from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from dataset.shapenet import CLASS_IDS, TRANSFORM, load_points, read_split
 from evaluate import load_head, load_vit
@@ -66,6 +68,18 @@ def load_image(pix3d_root, item, background):
     return padded.crop((cx - half, cy - half, cx + half, cy + half))
 
 
+class Pix3DImages(Dataset):
+    # Lets the DataLoader prepare the (large) Pix3D photos in several workers
+    def __init__(self, pix3d_root, items, background):
+        self.pix3d_root, self.items, self.background = pix3d_root, items, background
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        return TRANSFORM(load_image(self.pix3d_root, self.items[idx], self.background)), idx
+
+
 @torch.no_grad()
 def main():
     parser = argparse.ArgumentParser()
@@ -106,13 +120,13 @@ def main():
     render = np.array(Image.open(os.path.join(data_cfg["image_root"], first[0], first[1], "rendering", "00.png")))
     background = tuple(int(v) for v in render[0, 0, :3])
 
+    gt_index = torch.tensor([model_index[gt_path(it)] for it in items])
+    loader = DataLoader(Pix3DImages(args.pix3d_root, items, background), batch_size=64, num_workers=8)
     cds, fs = [], []
-    for i in range(0, len(items), 64):
-        batch = items[i:i + 64]
-        images = torch.stack([TRANSFORM(load_image(args.pix3d_root, it, background)) for it in batch]).to(device)
-        gt = points[torch.tensor([model_index[gt_path(it)] for it in batch], device=device)]
+    for images, idx in tqdm(loader):
+        gt = points[gt_index[idx].to(device)]
         with torch.autocast("cuda", dtype=torch.bfloat16):
-            pred = model(images)
+            pred = model(images.to(device))
         cd, f = chamfer_fscore(pred.float(), gt)
         cds.append(cd.cpu())
         fs.append(f.cpu())
