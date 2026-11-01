@@ -17,11 +17,14 @@ TRANSFORM = transforms.Compose([
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
 ])
 
-# V3: training augmentation (colour and small shift / zoom). No flip: the ground truth is in the
+# V3: training augmentation (small shift / zoom, random background, colour). No flip: the ground truth is in the
 # object frame, so a mirrored image would not match its point cloud.
-TRAIN_TRANSFORM = transforms.Compose([
+# Shift / zoom is done on the transparent image, so new border pixels are transparent too.
+TRAIN_SHAPE = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.9, 1.1)),
+])
+TRAIN_COLOR = transforms.Compose([
     transforms.ColorJitter(0.3, 0.3, 0.3),
     transforms.ToTensor(),
     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -77,7 +80,7 @@ class ImageDataset(Dataset):
     # One sample = one rendered view of one object.
     # Train uses all views, val/test use only view 00 (as official code).
     # all_views=True uses every view also for val/test (for the error analysis).
-    # augment=True (V3 training): random background colour + TRAIN_TRANSFORM.
+    # augment=True (V3 training): TRAIN_SHAPE, random background colour, TRAIN_COLOR.
     def __init__(self, data_cfg, stage, all_views=False, augment=False):
         self.data_cfg = data_cfg
         self.augment = augment
@@ -108,11 +111,12 @@ class ImageDataset(Dataset):
         image = Image.open(image_path(self.data_cfg, class_id, obj, view))
         if not self.augment:
             return TRANSFORM(image.convert("RGB")), obj_idx
-        # Put the object (transparent PNG) on a background of random colour
+        # Shift / zoom, then put the object (transparent PNG) on a background of random colour
+        image = TRAIN_SHAPE(image.convert("RGBA"))
         color = tuple(np.random.randint(0, 256, 3).tolist())
         background = Image.new("RGB", image.size, color)
         background.paste(image.convert("RGB"), mask=image.getchannel("A"))
-        return TRAIN_TRANSFORM(background), obj_idx
+        return TRAIN_COLOR(background), obj_idx
 
 
 def feature_path(data_cfg, stage):

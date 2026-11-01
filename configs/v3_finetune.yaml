@@ -24,7 +24,7 @@ model:
   finetune_blocks: 4    # train the last 4 of 12 ViT blocks
 
 train:
-  epochs: 10            # starts from V2, every step runs the full model on augmented images
+  epochs: 8             # about 16 min per epoch on L4: every step runs the full model on augmented images
   init_head: outputs/v2_dinov2/best.pt
   optimizer: adam
   lr: 3.0e-5            # decoder
