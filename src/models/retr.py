@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 # 3D-RETR-S (Shi et al., BMVC 2021), rewritten in plain PyTorch from github.com/FomalhautB/3D-RETR
 # (src/models/decoder.py VoxelDecoderCNN, src/models/transformer/*, based on lucidrains/x-transformers).
-# Image -> DeiT-Tiny tokens -> Transformer decoder with 4x4x4 = 64 learnable queries -> 3D CNN -> 32^3 logits.
+# Image -> encoder tokens -> Transformer decoder with n^3 learnable queries -> 3D CNN -> 32^3 logits.
 
 
 class Attention(nn.Module):
@@ -71,7 +71,7 @@ class RETR(nn.Module):
     def __init__(self, cfg, pretrained=True):
         super().__init__()
         dim = cfg["decoder_dim"]
-        self.patch_num = cfg["patch_num"]  # 4: queries form a 4 x 4 x 4 grid
+        self.patch_num = cfg["patch_num"]  # queries form an n x n x n grid (baseline n = 4, V2 n = 8)
         # Encoder, fine-tuned. Baseline: DeiT-Tiny distilled (dim 192). V1: DINOv2 ViT-S/14 with registers (dim 384).
         # img_size=224 for every encoder (DINOv2 default is 518)
         self.encoder = timm.create_model(cfg["encoder"], pretrained=pretrained, num_classes=0, img_size=224,
@@ -81,32 +81,31 @@ class RETR(nn.Module):
             self.context_proj = nn.Linear(self.encoder.num_features, dim)
         else:
             self.context_proj = nn.Identity()
-        # Transformer decoder: one learnable query per 8 x 8 x 8 block of the voxel grid
+        # Transformer decoder: one learnable query per block of the voxel grid (n = 4: 8^3 voxels, n = 8: 4^3 voxels)
         self.queries = nn.Embedding(self.patch_num ** 3, dim)
         self.layers = nn.ModuleList([DecoderLayer(dim, cfg["decoder_heads"], cfg["decoder_dropout"])
                                      for _ in range(cfg["decoder_depth"])])
         self.norm = nn.LayerNorm(dim)
-        # 3D CNN: (192, 4, 4, 4) -> (64, 4, 4, 4) -> 2 ResBlocks -> 3 x upsample (8, 16, 32) -> (1, 32, 32, 32)
+        # 3D CNN: (192, n, n, n) -> (64, n, n, n) -> 2 ResBlocks -> upsample x2 until 32 -> (1, 32, 32, 32).
+        # Baseline / V1: n = 4, 3 upsamples (8, 16, 32). V2: n = 8, 2 upsamples (16, 32).
         ch = cfg["cnn_dim"]
-        self.cnn = nn.Sequential(
-            nn.Conv3d(dim, ch, 1),
-            ResBlock(ch),
-            ResBlock(ch),
-            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
-            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
-            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
-            nn.Conv3d(ch, 1, 1),
-        )
+        layers = [nn.Conv3d(dim, ch, 1), ResBlock(ch), ResBlock(ch)]
+        size = self.patch_num
+        while size < 32:
+            layers += [nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU()]
+            size *= 2
+        layers.append(nn.Conv3d(ch, 1, 1))
+        self.cnn = nn.Sequential(*layers)
 
     def forward(self, images):
         # All tokens after the last LayerNorm. DeiT: CLS, distillation, 14 x 14 patches (B, 198, 192).
         # DINOv2: CLS, 4 registers, 16 x 16 patches (B, 261, 384), projected to 192.
         context = self.context_proj(self.encoder.forward_features(images))
-        x = self.queries.weight.unsqueeze(0).expand(len(images), -1, -1)  # (B, 64, 192)
+        x = self.queries.weight.unsqueeze(0).expand(len(images), -1, -1)  # (B, n^3, 192)
         for layer in self.layers:
             x = layer(x, context)
         x = self.norm(x)
-        # Query i -> position (h, w, d) of the 4 x 4 x 4 grid, channels first for Conv3d
+        # Query i -> position (h, w, d) of the n x n x n grid, channels first for Conv3d
         n = self.patch_num
-        x = x.transpose(1, 2).reshape(len(images), -1, n, n, n)  # (B, 192, 4, 4, 4)
+        x = x.transpose(1, 2).reshape(len(images), -1, n, n, n)  # (B, 192, n, n, n)
         return self.cnn(x).squeeze(1)  # (B, 32, 32, 32) logits; sigmoid > 0.5 means occupied
