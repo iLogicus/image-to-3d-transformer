@@ -14,7 +14,7 @@ from theme import LabTheme
 POINT_MODELS = [(label, name) for name, label in MODELS.items() if OUTPUTS[name] == "points"]
 VOXEL_MODELS = [(label, name) for name, label in MODELS.items() if OUTPUTS[name] == "voxels"]
 CAMERA = (35, 70, 2.0)  # 3D viewers: degrees around the vertical axis, degrees from the top, distance
-EXAMPLES = sorted(glob.glob("app/examples/*"))  # optional: a few photos of the team
+EXAMPLES = sorted(glob.glob("app/examples/*"))  # optional example images (none in the repo)
 try:
     SAMPLES = load_samples()  # test set renders with ground truth (samples.pt from export_samples.py)
 except Exception as e:  # e.g. no samples.pt, no internet, cache folder not writable

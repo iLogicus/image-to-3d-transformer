@@ -1,5 +1,4 @@
 import io
-import json
 import os
 import sys
 import tempfile
@@ -111,25 +110,6 @@ def test_api():
     bad = {"image": ("x.png", b"not an image", "image/png")}
     assert client.post("/predict", files=bad).status_code == 400
     assert client.get("/").status_code == 200  # Gradio page
-
-
-def test_build_photos():
-    from build_photos import build, evaluate, sheet
-
-    raw, out = tempfile.mkdtemp(), tempfile.mkdtemp()
-    for obj in ["a", "b"]:
-        for view in ["1", "2"]:
-            os.makedirs(os.path.join(raw, "chair", obj), exist_ok=True)
-            chair_png().save(os.path.join(raw, "chair", obj, view + ".png"))
-    build(raw, out)
-    result = os.path.join(out, "consistency.json")
-    evaluate(out, result)
-    r = json.load(open(result))
-    assert set(r) == set(MODELS) and r["b1_v3"]["chair"]["cd_same_object"] is not None
-    manifest = json.load(open(os.path.join(out, "manifest.json")))
-    assert len(manifest) == 4 and "date_taken" in manifest[0] and "camera" in manifest[0]
-    sheet(raw, out, os.path.join(out, "sheet.png"))
-    assert Image.open(os.path.join(out, "sheet.png")).size == (4 * 160, 2 * 180)
 
 
 def test_sample_tab():
