@@ -3,6 +3,7 @@ seed: 0
 data:
   image_root: data/raw/ShapeNetRendering
   voxel_root: data/raw/ShapeNetVox32
+  points_root: data/raw/ShapeNet_pointclouds  # 3D-LMNet points, only to compare with baseline 1
   split: data/ShapeNet.json
   classes: [car, airplane, chair]
   mean: [0.485, 0.456, 0.406]  # ImageNet mean / std, as DINOv2 training
