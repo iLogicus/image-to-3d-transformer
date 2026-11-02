@@ -1,8 +1,8 @@
 # CI: tests on every push / pull request, then the Docker image is built and smoke tested.
 # CD (push to main or manual run): the image goes to GitHub Container Registry, and the same image is deployed to
 # Google Cloud Run (public URL). The two CD jobs are independent.
-# Repo settings needed for deploy: secret GCP_SA_KEY (service account key JSON), variables GCP_PROJECT and
-# GCP_REGION. Without GCP_SA_KEY the deploy steps are skipped.
+# Repo variables needed for deploy (no secret: GitHub logs in to Google Cloud with its OIDC token, Workload Identity
+# Federation): GCP_PROJECT, GCP_REGION, GCP_WIF_PROVIDER, GCP_SA. Without GCP_WIF_PROVIDER the deploy steps are skipped.
 name: CI/CD
 
 on:
@@ -62,26 +62,30 @@ jobs:
     needs: docker
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
-      HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+      HAS_GCP: ${{ vars.GCP_WIF_PROVIDER != '' }}
       REGION: ${{ vars.GCP_REGION }}
       IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/image-to-3d/app:latest
     steps:
       - uses: actions/checkout@v5
       - uses: google-github-actions/auth@v3
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_GCP == 'true'
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA }}
       - uses: google-github-actions/setup-gcloud@v3
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_GCP == 'true'
       - name: Build and push to Artifact Registry
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_GCP == 'true'
         run: |
           gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
           docker build -f docker/Dockerfile -t $IMAGE .
           docker push $IMAGE
       - name: Deploy to Cloud Run
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_GCP == 'true'
         # 8 GB: the 4 models (~3 GB) plus the downloaded weights, kept in memory by Cloud Run.
         # 0 to 1 instance: free when nobody uses it, first request after a pause takes about a minute.
         run: |
