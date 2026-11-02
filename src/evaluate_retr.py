@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--config", required=True)
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--split", default="test")
-    parser.add_argument("--name", default="test_results", help="name of the output json")
+    parser.add_argument("--name", default="test_full", help="name of the output json")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

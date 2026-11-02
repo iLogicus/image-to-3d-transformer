@@ -48,7 +48,7 @@ def main():
     parser.add_argument("--split", default="test")
     parser.add_argument("--official", action="store_true", help="ckpt is the authors' pc1024_three.pth")
     parser.add_argument("--exclude", default=None, help="txt of objects to leave out (e.g. the authors' train list)")
-    parser.add_argument("--name", default="test_results", help="name of the output json")
+    parser.add_argument("--name", default="test_full", help="name of the output json")
     args = parser.parse_args()
 
     cfg = load_config(args.config)

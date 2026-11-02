@@ -38,4 +38,4 @@ train:
   amp: bf16
   select_by: val_iou
 
-output_dir: outputs/retr_v1_dinov2
+output_dir: outputs/baseline2/v1_dinov2

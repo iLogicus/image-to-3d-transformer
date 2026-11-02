@@ -31,4 +31,4 @@ train:
   amp: bf16
   select_by: val_cd
 
-output_dir: outputs/v0_no_attention
+output_dir: outputs/baseline1/v0_no_attention

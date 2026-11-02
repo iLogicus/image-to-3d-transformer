@@ -38,4 +38,4 @@ train:
   amp: bf16
   select_by: val_iou
 
-output_dir: outputs/retr_v2_queries
+output_dir: outputs/baseline2/v2_queries

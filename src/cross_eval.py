@@ -101,7 +101,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--retr_configs", nargs="+", required=True, help="baseline 2 runs (best.pt in output_dir)")
     parser.add_argument("--rgb2point_configs", nargs="+", required=True, help="baseline 1 runs (frozen ViT cache)")
-    parser.add_argument("--out", default="outputs/cross_eval.json")
+    parser.add_argument("--out", default="outputs/baseline2/cross_eval.json")
     args = parser.parse_args()
 
     set_seed(0)

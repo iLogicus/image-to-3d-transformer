@@ -31,4 +31,4 @@ train:
   amp: bf16
   select_by: val_cd
 
-output_dir: outputs/rgb2point
+output_dir: outputs/baseline1/base_rgb2point

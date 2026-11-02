@@ -25,7 +25,7 @@ model:
 
 train:
   epochs: 8             # about 16 min per epoch on L4: every step runs the full model on augmented images
-  init_head: outputs/v2_dinov2/best.pt
+  init_head: outputs/baseline1/v2_dinov2/best.pt
   optimizer: adam
   lr: 3.0e-5            # decoder
   vit_lr: 1.0e-5        # last ViT blocks
@@ -35,4 +35,4 @@ train:
   amp: bf16
   select_by: val_cd
 
-output_dir: outputs/v3_finetune
+output_dir: outputs/baseline1/v3_finetune
