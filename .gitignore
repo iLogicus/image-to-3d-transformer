@@ -20,3 +20,6 @@ docs/
 
 # Claude Code notes
 CLAUDE.md
+
+# Demo weights (made by src/export_demo.py)
+weights/

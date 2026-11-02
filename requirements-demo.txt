@@ -1,0 +1,15 @@
+# Demo / API / Docker only (CPU). Install torch first:
+# pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cpu
+timm==1.0.30
+numpy==2.5.4
+pillow==12.3.0
+pyyaml==6.0.3
+trimesh==5.2.0
+gradio==6.30.0
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.33
+huggingface_hub==2.4.0
+rembg[cpu]==2.0.86
+pytest==9.2.0
+httpx==0.28.1
