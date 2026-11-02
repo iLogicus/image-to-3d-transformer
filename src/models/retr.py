@@ -1,3 +1,5 @@
+import os
+
 import timm
 import torch
 import torch.nn as nn
@@ -109,3 +111,11 @@ class RETR(nn.Module):
         n = self.patch_num
         x = x.transpose(1, 2).reshape(len(images), -1, n, n, n)  # (B, 192, n, n, n)
         return self.cnn(x).squeeze(1)  # (B, 32, 32, 32) logits; sigmoid > 0.5 means occupied
+
+
+def load_trained(cfg, device):
+    # Model of one baseline 2 run with its best checkpoint (chosen on val IoU), ready for inference
+    model = RETR(cfg["model"], pretrained=False).to(device).eval()
+    ckpt = torch.load(os.path.join(cfg["output_dir"], "best.pt"), map_location="cpu")
+    model.load_state_dict(ckpt["model"])
+    return model
