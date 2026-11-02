@@ -72,9 +72,15 @@ class RETR(nn.Module):
         super().__init__()
         dim = cfg["decoder_dim"]
         self.patch_num = cfg["patch_num"]  # 4: queries form a 4 x 4 x 4 grid
-        # Encoder: DeiT-Tiny distilled (dim 192), attention dropout 0.4, fine-tuned
-        self.encoder = timm.create_model(cfg["encoder"], pretrained=pretrained, num_classes=0,
+        # Encoder, fine-tuned. Baseline: DeiT-Tiny distilled (dim 192). V1: DINOv2 ViT-S/14 with registers (dim 384).
+        # img_size=224 for every encoder (DINOv2 default is 518)
+        self.encoder = timm.create_model(cfg["encoder"], pretrained=pretrained, num_classes=0, img_size=224,
                                          attn_drop_rate=cfg["encoder_dropout"])
+        # V1: project the image tokens to the decoder size (384 -> 192). Baseline: sizes are equal, nothing to do.
+        if self.encoder.num_features != dim:
+            self.context_proj = nn.Linear(self.encoder.num_features, dim)
+        else:
+            self.context_proj = nn.Identity()
         # Transformer decoder: one learnable query per 8 x 8 x 8 block of the voxel grid
         self.queries = nn.Embedding(self.patch_num ** 3, dim)
         self.layers = nn.ModuleList([DecoderLayer(dim, cfg["decoder_heads"], cfg["decoder_dropout"])
@@ -93,8 +99,9 @@ class RETR(nn.Module):
         )
 
     def forward(self, images):
-        # All 198 tokens of DeiT (CLS, distillation, 14 x 14 patches) after the last LayerNorm: (B, 198, 192)
-        context = self.encoder.forward_features(images)
+        # All tokens after the last LayerNorm. DeiT: CLS, distillation, 14 x 14 patches (B, 198, 192).
+        # DINOv2: CLS, 4 registers, 16 x 16 patches (B, 261, 384), projected to 192.
+        context = self.context_proj(self.encoder.forward_features(images))
         x = self.queries.weight.unsqueeze(0).expand(len(images), -1, -1)  # (B, 64, 192)
         for layer in self.layers:
             x = layer(x, context)

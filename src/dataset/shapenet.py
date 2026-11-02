@@ -150,14 +150,15 @@ def drop_objects(cache, exclude_file):
 
 # ---------------- Baseline 2 (3D-RETR): image -> 32^3 voxels ----------------
 
-# Same as 3D-RETR train.py: CenterCrop((224, 224), (128, 128)) = crop the middle 128 x 128 of the 137 x 137
-# render, resize to 224, then x * 2 - 1 (mean 0.5, std 0.5)
-RETR_TRANSFORM = transforms.Compose([
-    transforms.CenterCrop(128),
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-])
+def retr_transform(data_cfg):
+    # Same as 3D-RETR train.py: CenterCrop((224, 224), (128, 128)) = crop the middle 128 x 128 of the 137 x 137
+    # render, resize to 224. Baseline: x * 2 - 1 (mean 0.5, std 0.5). V1 (DINOv2): ImageNet mean / std.
+    return transforms.Compose([
+        transforms.CenterCrop(128),
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(data_cfg["mean"], data_cfg["std"]),
+    ])
 
 
 def voxel_path(data_cfg, class_id, obj):
@@ -182,6 +183,7 @@ class VoxelDataset(Dataset):
     # False uses every view in each epoch (as baseline 1). Val/test: only view 00 (official mode="first").
     def __init__(self, data_cfg, stage, all_views=False):
         self.data_cfg = data_cfg
+        self.transform = retr_transform(data_cfg)
         self.random_view = stage == "train" and data_cfg["one_view_per_object"]
         self.objects = []
         self.views = []    # all views of each object
@@ -220,4 +222,4 @@ class VoxelDataset(Dataset):
         image = Image.new("RGB", rgba.size, color)
         image.paste(rgba.convert("RGB"), mask=rgba.getchannel("A"))
         voxels = torch.from_numpy(read_binvox(voxel_path(self.data_cfg, class_id, obj)))
-        return RETR_TRANSFORM(image), voxels, obj_idx
+        return self.transform(image), voxels, obj_idx

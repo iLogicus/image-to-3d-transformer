@@ -58,8 +58,13 @@ def main():
 
     model = RETR(model_cfg).to(device)
     print("Params:", sum(p.numel() for p in model.parameters()))
-    optimizer = torch.optim.AdamW(model.parameters(), lr=train_cfg["lr"], weight_decay=train_cfg["weight_decay"],
-                                  fused=True)
+    # Encoder and decoder can have different learning rates (baseline: both 1e-4, V1: encoder 1e-5)
+    encoder_params = list(model.encoder.parameters())
+    decoder_params = [p for name, p in model.named_parameters() if not name.startswith("encoder.")]
+    optimizer = torch.optim.AdamW([
+        {"params": encoder_params, "lr": train_cfg["encoder_lr"]},
+        {"params": decoder_params, "lr": train_cfg["lr"]},
+    ], weight_decay=train_cfg["weight_decay"], fused=True)
 
     # Resume from the last epoch if the session was disconnected
     start_epoch, best_iou = 0, 0.0
@@ -93,7 +98,7 @@ def main():
             "train_loss": total_loss / steps,
             "val_iou": val_iou,
             "val_per_class": val,
-            "lr": optimizer.param_groups[0]["lr"],
+            "lr": optimizer.param_groups[1]["lr"],
             "time_s": time.time() - t0,
         }
         with open(os.path.join(out_dir, "log.jsonl"), "a") as f:

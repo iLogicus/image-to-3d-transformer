@@ -5,6 +5,8 @@ data:
   voxel_root: data/raw/ShapeNetVox32
   split: data/ShapeNet.json
   classes: [car, airplane, chair]
+  mean: [0.5, 0.5, 0.5]       # official normalize: x * 2 - 1
+  std: [0.5, 0.5, 0.5]
   background: 0                # official command does not set --background, so the default (0, 0, 0) is used
   one_view_per_object: true    # official epoch: one random view of each object
   batch_size: 16
@@ -27,6 +29,7 @@ train:
   epochs: 50
   optimizer: adamw
   lr: 1.0e-4
+  encoder_lr: 1.0e-4           # official: one lr for the whole model
   weight_decay: 1.0e-2
   loss: dice
   amp: bf16
