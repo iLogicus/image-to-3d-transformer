@@ -49,7 +49,7 @@ def main():
     if finished_run(out_dir, epochs):
         return
 
-    train_set = VoxelDataset(data_cfg, "train")
+    train_set = VoxelDataset(data_cfg, "train", augment=data_cfg["augment"])
     val_set = VoxelDataset(data_cfg, "val")
     train_loader = DataLoader(train_set, batch_size=data_cfg["batch_size"], shuffle=True,
                               num_workers=data_cfg["num_workers"], worker_init_fn=seed_worker,
@@ -65,6 +65,11 @@ def main():
         {"params": encoder_params, "lr": train_cfg["encoder_lr"]},
         {"params": decoder_params, "lr": train_cfg["lr"]},
     ], weight_decay=train_cfg["weight_decay"], fused=True)
+    # Baseline / V1 / V2: constant lr (official). V3: cosine decay to 0 over the epochs.
+    if train_cfg["scheduler"] == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=train_cfg["epochs"])
+    else:
+        scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=0)
 
     # Resume from the last epoch if the session was disconnected
     start_epoch, best_iou = 0, 0.0
@@ -73,6 +78,7 @@ def main():
         ckpt = torch.load(last_path, map_location="cpu")
         model.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optimizer"])
+        scheduler.load_state_dict(ckpt["scheduler"])
         train_loader.generator.set_state(ckpt["generator"])
         start_epoch, best_iou = ckpt["epoch"] + 1, ckpt["best_iou"]
         print(f"Resumed from epoch {start_epoch}")
@@ -90,6 +96,7 @@ def main():
             optimizer.step()
             total_loss += loss.item()
             steps += 1
+        scheduler.step()
 
         val = validate(model, val_loader, device, model_cfg["threshold"])
         val_iou = val["mean"]["iou"]
@@ -112,6 +119,7 @@ def main():
         torch.save({
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
             "generator": train_loader.generator.get_state(),
             "epoch": epoch,
             "best_iou": best_iou,

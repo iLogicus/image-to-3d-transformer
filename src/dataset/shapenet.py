@@ -161,6 +161,15 @@ def retr_transform(data_cfg):
     ])
 
 
+# V3 (baseline 2): training augmentation, same idea as V3 of baseline 1. Shift / zoom on the transparent image
+# (so new border pixels are transparent too), then a background of random colour, then colour jitter. No flip.
+RETR_SHAPE = transforms.Compose([
+    transforms.CenterCrop(128),
+    transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.9, 1.1)),
+])
+RETR_COLOR = transforms.ColorJitter(0.3, 0.3, 0.3)
+
+
 def voxel_path(data_cfg, class_id, obj):
     return os.path.join(data_cfg["voxel_root"], class_id, obj, "model.binvox")
 
@@ -181,8 +190,10 @@ class VoxelDataset(Dataset):
     # One sample = one rendered view + the 32^3 voxel grid of the object.
     # Train: one_view_per_object=True is the official 3D-RETR epoch (one random view of each object),
     # False uses every view in each epoch (as baseline 1). Val/test: only view 00 (official mode="first").
-    def __init__(self, data_cfg, stage, all_views=False):
+    # augment=True (V3 training): RETR_SHAPE, random background colour, RETR_COLOR.
+    def __init__(self, data_cfg, stage, all_views=False, augment=False):
         self.data_cfg = data_cfg
+        self.augment = augment
         self.transform = retr_transform(data_cfg)
         self.random_view = stage == "train" and data_cfg["one_view_per_object"]
         self.objects = []
@@ -218,8 +229,14 @@ class VoxelDataset(Dataset):
             view = int(np.random.choice(self.views[obj_idx]))
         # Put the transparent render on a plain background (official command: black, --background default 0 0 0)
         rgba = Image.open(image_path(self.data_cfg, class_id, obj, view)).convert("RGBA")
-        color = (self.data_cfg["background"],) * 3
+        voxels = torch.from_numpy(read_binvox(voxel_path(self.data_cfg, class_id, obj)))
+        if self.augment:
+            rgba = RETR_SHAPE(rgba)  # 128 x 128, so the CenterCrop(128) of self.transform does nothing
+            color = tuple(np.random.randint(0, 256, 3).tolist())
+        else:
+            color = (self.data_cfg["background"],) * 3
         image = Image.new("RGB", rgba.size, color)
         image.paste(rgba.convert("RGB"), mask=rgba.getchannel("A"))
-        voxels = torch.from_numpy(read_binvox(voxel_path(self.data_cfg, class_id, obj)))
+        if self.augment:
+            image = RETR_COLOR(image)
         return self.transform(image), voxels, obj_idx

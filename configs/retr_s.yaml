@@ -8,6 +8,7 @@ data:
   mean: [0.5, 0.5, 0.5]       # official normalize: x * 2 - 1
   std: [0.5, 0.5, 0.5]
   background: 0                # official command does not set --background, so the default (0, 0, 0) is used
+  augment: false
   one_view_per_object: true    # official epoch: one random view of each object
   batch_size: 16
   num_workers: 8
@@ -31,6 +32,7 @@ train:
   lr: 1.0e-4
   encoder_lr: 1.0e-4           # official: one lr for the whole model
   weight_decay: 1.0e-2
+  scheduler: constant          # official sched_factor = 1
   loss: dice
   amp: bf16
   select_by: val_iou

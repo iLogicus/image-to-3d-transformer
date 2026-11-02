@@ -1,0 +1,40 @@
+seed: 0
+
+data:
+  image_root: data/raw/ShapeNetRendering
+  voxel_root: data/raw/ShapeNetVox32
+  split: data/ShapeNet.json
+  classes: [car, airplane, chair]
+  mean: [0.485, 0.456, 0.406]  # ImageNet mean / std, as DINOv2 training
+  std: [0.229, 0.224, 0.225]
+  background: 0                # official command does not set --background, so the default (0, 0, 0) is used
+  augment: true               # V3: shift / zoom, random background colour, colour jitter
+  one_view_per_object: true    # official epoch: one random view of each object
+  batch_size: 16
+  num_workers: 8
+  test_view: 0                 # official val/test mode="first"
+
+model:
+  name: retr_v3_augment
+  encoder: vit_small_patch14_reg4_dinov2.lvd142m  # V1: DINOv2 ViT-S/14 with 4 registers (22M)
+  encoder_dropout: 0.4
+  decoder_depth: 6
+  decoder_heads: 3
+  decoder_dim: 192
+  decoder_dropout: 0.4
+  patch_num: 8                 # V2: 8^3 = 512 queries, each predicts a 4^3 block (V1: 64 queries, 8^3 blocks)
+  cnn_dim: 64
+  threshold: 0.5
+
+train:
+  epochs: 50
+  optimizer: adamw
+  lr: 1.0e-4
+  encoder_lr: 1.0e-5           # V1: small lr to keep the pretrained DINOv2 features
+  weight_decay: 1.0e-2
+  scheduler: cosine            # V3: cosine decay over 50 epochs
+  loss: dice
+  amp: bf16
+  select_by: val_iou
+
+output_dir: outputs/retr_v3_augment
