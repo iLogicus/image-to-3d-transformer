@@ -1,0 +1,12 @@
+.git
+.github
+data
+docs
+notebooks
+outputs
+reports
+tests
+configs
+weights
+**/__pycache__
+.gradio
