@@ -16,7 +16,7 @@ sys.path.insert(0, "src")
 sys.path.insert(0, "app")
 sys.path.insert(0, "api")
 
-from demo import MODELS, prepare, reconstruct, save_result
+from demo import MODELS, OUTPUTS, prepare, reconstruct, save_result
 from export_demo import make_info
 from models.retr import RETR
 from models.rgb2point import build_model
@@ -29,8 +29,8 @@ TINY_VOXELS = {"encoder": "vit_tiny_patch16_224", "encoder_dropout": 0.0, "decod
 
 def setup_module():
     torch.manual_seed(0)
-    for name, label in MODELS.items():
-        if "point cloud" in label:
+    for name in MODELS:
+        if OUTPUTS[name] == "points":
             model = build_model(TINY_POINTS, 64, pretrained=False)
             info = make_info("points", model, TINY_POINTS, [0.5] * 3, [0.5] * 3, num_points=64)
         else:
@@ -87,21 +87,27 @@ def test_reconstruct_and_files(name):
 
 
 def test_api():
-    from fastapi.testclient import TestClient
-    from main import app
+    from typing import get_args
 
+    from fastapi.testclient import TestClient
+    from main import ModelName, app
+
+    assert set(get_args(ModelName)) == set(MODELS)  # API model list in sync with demo.MODELS
     client = TestClient(app)
     assert client.get("/health").json() == {"status": "ok"}
-    assert set(client.get("/models").json()) == set(MODELS)
+    assert [m["name"] for m in client.get("/models").json()] == list(MODELS)
+    assert client.get("/openapi.json").json()["info"]["title"] == "Single-image 3D reconstruction API"
+    # Only the main event is listed on the Gradio "Use via API" page
+    assert list(client.get("/gradio_api/info").json()["named_endpoints"]) == ["/reconstruct"]
 
     buffer = io.BytesIO()
     chair_png().save(buffer, format="PNG")
     files = {"image": ("chair.png", buffer.getvalue(), "image/png")}
     r = client.post("/predict?model=b1_v3", files=files)
-    assert r.status_code == 200 and len(r.json()["points"]) == 64
+    assert r.status_code == 200 and len(r.json()["points"]) == 64 and r.json()["label"] == MODELS["b1_v3"]
     r = client.post("/predict?model=b2_v4&format=file", files=files)
     assert r.status_code == 200 and r.content.startswith(b"#")  # .obj text file
-    assert client.post("/predict?model=nope", files=files).status_code == 400
+    assert client.post("/predict?model=nope", files=files).status_code == 422  # not in the model list
     bad = {"image": ("x.png", b"not an image", "image/png")}
     assert client.post("/predict", files=bad).status_code == 400
     assert client.get("/").status_code == 200  # Gradio page

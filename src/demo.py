@@ -16,13 +16,15 @@ from models.rgb2point import build_model
 # Shared code of the Gradio demo (app/gradio_app.py) and the FastAPI server (api/main.py):
 # photo -> object mask -> square crop -> model -> point cloud or voxels -> files for the 3D viewer and download.
 
-# Demo models. Weight files are made on Colab by src/export_demo.py.
+# Demo models: name used by the code and the API -> name shown to people (same in the demo, the API and the CLI).
+# Weight files are made on Colab by src/export_demo.py.
 MODELS = {
-    "b1_v3": "Baseline 1 V3: DINOv2 + query decoder (point cloud)",
-    "rgb2point": "Baseline 1: RGB2Point (point cloud)",
-    "b2_v4": "Baseline 2 V4: DINOv2 + augmentation (voxels)",
-    "retr_s": "Baseline 2: 3D-RETR-S (voxels)",
+    "b1_v3": "V3 (ours): DINOv2 + query decoder",
+    "rgb2point": "RGB2Point (baseline 1)",
+    "b2_v4": "V4 (ours): DINOv2 + augmentation",
+    "retr_s": "3D-RETR-S (baseline 2)",
 }
+OUTPUTS = {"b1_v3": "points", "rgb2point": "points", "b2_v4": "voxels", "retr_s": "voxels"}
 WEIGHTS_DIR = os.environ.get("WEIGHTS_DIR", "weights")
 # Public Hugging Face model repo with the weight files and test samples (made on Colab by export_demo.py and
 # export_samples.py), downloaded once into the Hugging Face cache, so the demo runs without Colab or Drive.

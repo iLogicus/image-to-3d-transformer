@@ -8,18 +8,11 @@ import gradio as gr
 sys.path.insert(0, "src")  # run from repo root: python app/gradio_app.py
 sys.path.insert(0, "app")
 
-from demo import MODELS, ground_truth, load_samples, on_background, predict, prepare, save_result, score
+from demo import MODELS, OUTPUTS, ground_truth, load_samples, on_background, predict, prepare, save_result, score
 from theme import LabTheme
 
-# Short names for the interface (the API keeps the long names of demo.MODELS)
-NAMES = {
-    "b1_v3": "V3 (ours): DINOv2 + query decoder",
-    "rgb2point": "RGB2Point (baseline 1)",
-    "b2_v4": "V4 (ours): DINOv2 + augmentation",
-    "retr_s": "3D-RETR-S (baseline 2)",
-}
-POINT_MODELS = [(NAMES[name], name) for name in ["b1_v3", "rgb2point"]]
-VOXEL_MODELS = [(NAMES[name], name) for name in ["b2_v4", "retr_s"]]
+POINT_MODELS = [(label, name) for name, label in MODELS.items() if OUTPUTS[name] == "points"]
+VOXEL_MODELS = [(label, name) for name, label in MODELS.items() if OUTPUTS[name] == "voxels"]
 CAMERA = (35, 70, 2.0)  # 3D viewers: degrees around the vertical axis, degrees from the top, distance
 EXAMPLES = sorted(glob.glob("app/examples/*"))  # optional: a few photos of the team
 try:
@@ -112,7 +105,7 @@ def run(mode, image, remove_background, index, point_model, voxel_model):
         viewer, download = save_result(result, out_dir, name)
         files += [viewer, gr.DownloadButton(value=download, interactive=True)]
         output = "1024 points" if result["kind"] == "points" else f"{int(result['voxels'].sum())} voxels"
-        rows.append((NAMES[name], output, result["time_ms"], score(result, sample) if sample else "-"))
+        rows.append((MODELS[name], output, result["time_ms"], score(result, sample) if sample else "-"))
     if sample is None:
         gt = [None, None]
     else:
@@ -164,12 +157,13 @@ with gr.Blocks(title="Single-image 3D reconstruction") as demo:
     with gr.Accordion("About the models", open=False):
         gr.HTML(ABOUT)
 
-    upload_tab.select(lambda: "upload", None, mode)
-    test_tab.select(lambda: "test", None, mode)
-    gallery.select(select_sample, None, sample_index)
+    # Helper events are hidden from the "Use via API" page; the REST API is documented at /docs
+    upload_tab.select(lambda: "upload", None, mode, api_visibility="private")
+    test_tab.select(lambda: "test", None, mode, api_visibility="private")
+    gallery.select(select_sample, None, sample_index, api_visibility="private")
     button.click(run, [mode, image, remove_background, sample_index, point_model, voxel_model],
                  [model_input, point_view, point_download, voxel_view, voxel_download, gt_point_view,
-                  gt_voxel_view, metrics])
+                  gt_voxel_view, metrics], api_name="reconstruct")
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)), theme=THEME, css=CSS)
