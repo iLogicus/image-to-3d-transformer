@@ -41,8 +41,12 @@ def get_device():
 
 
 def print_epoch(log, epochs):
-    print(f"Epoch {log['epoch']}/{epochs}  loss {log['train_loss']:.4f}  val CD {log['val_cd']:.5f}  "
-          f"val F {log['val_fscore']:.4f}  lr {log['lr']:.1e}  {log['time_s']:.0f}s")
+    # Baseline 2 (voxels) logs val IoU, baseline 1 (points) logs val CD and F-score
+    if "val_iou" in log:
+        val = f"val IoU {log['val_iou']:.4f}"
+    else:
+        val = f"val CD {log['val_cd']:.5f}  val F {log['val_fscore']:.4f}"
+    print(f"Epoch {log['epoch']}/{epochs}  loss {log['train_loss']:.4f}  {val}  lr {log['lr']:.1e}  {log['time_s']:.0f}s")
 
 
 def finished_run(out_dir, epochs):

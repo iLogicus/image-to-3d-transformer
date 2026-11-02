@@ -1,0 +1,105 @@
+import timm
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+# 3D-RETR-S (Shi et al., BMVC 2021), rewritten in plain PyTorch from github.com/FomalhautB/3D-RETR
+# (src/models/decoder.py VoxelDecoderCNN, src/models/transformer/*, based on lucidrains/x-transformers).
+# Image -> DeiT-Tiny tokens -> Transformer decoder with 4x4x4 = 64 learnable queries -> 3D CNN -> 32^3 logits.
+
+
+class Attention(nn.Module):
+    # Multi-head attention as in the official code: no bias on q, k, v, dropout on the attention weights.
+    # context=None is self-attention, otherwise cross-attention (queries read the image tokens).
+    def __init__(self, dim, heads, dim_head=64, dropout=0.0):
+        super().__init__()
+        self.heads = heads
+        self.dim_head = dim_head
+        self.dropout = dropout
+        inner = heads * dim_head
+        self.to_q = nn.Linear(dim, inner, bias=False)
+        self.to_k = nn.Linear(dim, inner, bias=False)
+        self.to_v = nn.Linear(dim, inner, bias=False)
+        self.to_out = nn.Linear(inner, dim)
+
+    def forward(self, x, context=None):
+        if context is None:
+            context = x
+        b = x.shape[0]
+        # (B, N, heads * dim_head) -> (B, heads, N, dim_head)
+        q = self.to_q(x).view(b, -1, self.heads, self.dim_head).transpose(1, 2)
+        k = self.to_k(context).view(b, -1, self.heads, self.dim_head).transpose(1, 2)
+        v = self.to_v(context).view(b, -1, self.heads, self.dim_head).transpose(1, 2)
+        # softmax(q k^T / sqrt(dim_head)) v, dropout on the attention weights only while training
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=self.dropout if self.training else 0.0)
+        out = out.transpose(1, 2).reshape(b, -1, self.heads * self.dim_head)
+        return self.to_out(out)
+
+
+class DecoderLayer(nn.Module):
+    # Pre-norm layer: x + SelfAttn(LN(x)), x + CrossAttn(LN(x), image), x + FF(LN(x))
+    def __init__(self, dim, heads, dropout):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.self_attn = Attention(dim, heads, dropout=dropout)
+        self.norm2 = nn.LayerNorm(dim)
+        self.cross_attn = Attention(dim, heads, dropout=dropout)
+        self.norm3 = nn.LayerNorm(dim)
+        self.ff = nn.Sequential(nn.Linear(dim, dim * 4), nn.GELU(), nn.Linear(dim * 4, dim))
+
+    def forward(self, x, context):
+        x = x + self.self_attn(self.norm1(x))
+        x = x + self.cross_attn(self.norm2(x), context)
+        x = x + self.ff(self.norm3(x))
+        return x
+
+
+class ResBlock(nn.Module):
+    def __init__(self, ch):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv3d(ch, ch, 3, padding=1), nn.ReLU(),
+            nn.Conv3d(ch, ch, 3, padding=1), nn.ReLU(),
+            nn.Conv3d(ch, ch, 1),
+        )
+
+    def forward(self, x):
+        return x + self.net(x)
+
+
+class RETR(nn.Module):
+    def __init__(self, cfg, pretrained=True):
+        super().__init__()
+        dim = cfg["decoder_dim"]
+        self.patch_num = cfg["patch_num"]  # 4: queries form a 4 x 4 x 4 grid
+        # Encoder: DeiT-Tiny distilled (dim 192), attention dropout 0.4, fine-tuned
+        self.encoder = timm.create_model(cfg["encoder"], pretrained=pretrained, num_classes=0,
+                                         attn_drop_rate=cfg["encoder_dropout"])
+        # Transformer decoder: one learnable query per 8 x 8 x 8 block of the voxel grid
+        self.queries = nn.Embedding(self.patch_num ** 3, dim)
+        self.layers = nn.ModuleList([DecoderLayer(dim, cfg["decoder_heads"], cfg["decoder_dropout"])
+                                     for _ in range(cfg["decoder_depth"])])
+        self.norm = nn.LayerNorm(dim)
+        # 3D CNN: (192, 4, 4, 4) -> (64, 4, 4, 4) -> 2 ResBlocks -> 3 x upsample (8, 16, 32) -> (1, 32, 32, 32)
+        ch = cfg["cnn_dim"]
+        self.cnn = nn.Sequential(
+            nn.Conv3d(dim, ch, 1),
+            ResBlock(ch),
+            ResBlock(ch),
+            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
+            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
+            nn.ConvTranspose3d(ch, ch, 4, stride=2, padding=1), nn.ReLU(),
+            nn.Conv3d(ch, 1, 1),
+        )
+
+    def forward(self, images):
+        # All 198 tokens of DeiT (CLS, distillation, 14 x 14 patches) after the last LayerNorm: (B, 198, 192)
+        context = self.encoder.forward_features(images)
+        x = self.queries.weight.unsqueeze(0).expand(len(images), -1, -1)  # (B, 64, 192)
+        for layer in self.layers:
+            x = layer(x, context)
+        x = self.norm(x)
+        # Query i -> position (h, w, d) of the 4 x 4 x 4 grid, channels first for Conv3d
+        n = self.patch_num
+        x = x.transpose(1, 2).reshape(len(images), -1, n, n, n)  # (B, 192, 4, 4, 4)
+        return self.cnn(x).squeeze(1)  # (B, 32, 32, 32) logits; sigmoid > 0.5 means occupied

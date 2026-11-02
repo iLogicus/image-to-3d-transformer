@@ -146,3 +146,78 @@ def drop_objects(cache, exclude_file):
     cache["obj_index"] = cache["obj_index"][keep]
     print(f"Kept {keep.sum().item()} / {len(keep)} images (dropped objects in {exclude_file})")
     return cache
+
+
+# ---------------- Baseline 2 (3D-RETR): image -> 32^3 voxels ----------------
+
+# Same as 3D-RETR train.py: CenterCrop((224, 224), (128, 128)) = crop the middle 128 x 128 of the 137 x 137
+# render, resize to 224, then x * 2 - 1 (mean 0.5, std 0.5)
+RETR_TRANSFORM = transforms.Compose([
+    transforms.CenterCrop(128),
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+])
+
+
+def voxel_path(data_cfg, class_id, obj):
+    return os.path.join(data_cfg["voxel_root"], class_id, obj, "model.binvox")
+
+
+def read_binvox(path):
+    # binvox file: text header ending with "data", then run-length pairs (value, count) of bytes.
+    # The axes are swapped (0, 2, 1) as read_as_3d_array(fix_coords=True) used by 3D-RETR.
+    with open(path, "rb") as f:
+        while f.readline().strip() != b"data":
+            pass
+        raw = np.frombuffer(f.read(), dtype=np.uint8)
+    values, counts = raw[0::2], raw[1::2]
+    voxels = np.repeat(values, counts).reshape(32, 32, 32)
+    return np.transpose(voxels, (0, 2, 1)).astype(np.float32)
+
+
+class VoxelDataset(Dataset):
+    # One sample = one rendered view + the 32^3 voxel grid of the object.
+    # Train: one_view_per_object=True is the official 3D-RETR epoch (one random view of each object),
+    # False uses every view in each epoch (as baseline 1). Val/test: only view 00 (official mode="first").
+    def __init__(self, data_cfg, stage, all_views=False):
+        self.data_cfg = data_cfg
+        self.random_view = stage == "train" and data_cfg["one_view_per_object"]
+        self.objects = []
+        self.views = []    # all views of each object
+        self.samples = []  # (object index, view)
+        missing = 0
+        for class_id, obj in read_split(data_cfg["split"], data_cfg["classes"], stage):
+            if stage == "train" or all_views:
+                views = list(train_views(data_cfg, class_id, obj))
+            else:
+                views = [data_cfg["test_view"]]
+            ok = len(views) > 0 and os.path.exists(voxel_path(data_cfg, class_id, obj)) and all(
+                os.path.exists(image_path(data_cfg, class_id, obj, v)) for v in views)
+            if not ok:
+                missing += 1
+                continue
+            if self.random_view:
+                self.samples.append((len(self.objects), None))  # the view is chosen in __getitem__
+            else:
+                for v in views:
+                    self.samples.append((len(self.objects), v))
+            self.objects.append((class_id, obj))
+            self.views.append(views)
+        print(f"[{stage}] objects: {len(self.objects)}, samples: {len(self.samples)}, skipped (missing files): {missing}")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        obj_idx, view = self.samples[idx]
+        class_id, obj = self.objects[obj_idx]
+        if view is None:
+            view = int(np.random.choice(self.views[obj_idx]))
+        # Put the transparent render on a plain background (official command: black, --background default 0 0 0)
+        rgba = Image.open(image_path(self.data_cfg, class_id, obj, view)).convert("RGBA")
+        color = (self.data_cfg["background"],) * 3
+        image = Image.new("RGB", rgba.size, color)
+        image.paste(rgba.convert("RGB"), mask=rgba.getchannel("A"))
+        voxels = torch.from_numpy(read_binvox(voxel_path(self.data_cfg, class_id, obj)))
+        return RETR_TRANSFORM(image), voxels, obj_idx

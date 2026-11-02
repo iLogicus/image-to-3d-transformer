@@ -71,3 +71,21 @@ def evaluate_head(head, cache, batch_size=256, with_emd=False):
         results[class_id] = {k: metrics[k][mask].mean().item() for k in names}
     results["mean"] = {k: sum(r[k] for r in results.values()) / len(results) for k in names}
     return results
+
+
+def dice_loss(logits, target):
+    # Same as DiceLoss (smooth=1, p=2) in 3D-RETR losses.py: 1 - (sum(p*t) + 1) / (sum(p^2 + t^2) + 1), mean over batch
+    p = torch.sigmoid(logits.float()).flatten(1)
+    t = target.float().flatten(1)
+    num = (p * t).sum(1) + 1
+    den = (p ** 2 + t ** 2).sum(1) + 1
+    return (1 - num / den).mean()
+
+
+def voxel_iou(logits, target, threshold=0.5):
+    # Per-sample IoU as compute_iou in 3D-RETR utils.py: occupied if sigmoid > threshold
+    pred = torch.sigmoid(logits.float()).flatten(1) > threshold
+    t = target.flatten(1) > 0.5
+    inter = (pred & t).sum(1).float()
+    union = (pred | t).sum(1).float()
+    return inter / union
