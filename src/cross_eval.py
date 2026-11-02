@@ -60,12 +60,12 @@ def voxels_to_points(voxels, axes):
 
 
 def points_to_voxels(points, axes):
-    # (N, 3) points -> (32, 32, 32) bool, as R2N2 voxels: the grid fits the bounding box (longest side = 32),
-    # points mark their voxel, small gaps are closed, then the inside is filled
+    # (N, 3) points -> (32, 32, 32) bool, as R2N2 voxels: the longest side of the bounding box fills the grid
+    # and the box is centered in the grid; points mark their voxel, small gaps are closed, then the inside is filled
     q = points.cpu() @ axes  # back to the voxel axes
-    low = q.min(0).values
-    side = (q.max(0).values - low).max()
-    idx = ((q - low) / side * 32).long().clamp(0, 31).numpy()
+    low, high = q.min(0).values, q.max(0).values
+    side = (high - low).max()
+    idx = ((q - (low + high) / 2) / side * 32 + 16).long().clamp(0, 31).numpy()
     grid = np.zeros((32, 32, 32), dtype=bool)
     grid[idx[:, 0], idx[:, 1], idx[:, 2]] = True
     grid = ndimage.binary_closing(grid, iterations=1, border_value=0) | grid
