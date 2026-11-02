@@ -2,7 +2,6 @@ import argparse
 import os
 
 import torch
-import trimesh
 from PIL import Image
 
 from dataset.shapenet import TRANSFORM

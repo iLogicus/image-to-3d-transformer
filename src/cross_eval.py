@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from scipy import ndimage
 from torch.utils.data import DataLoader
 
-from dataset.shapenet import CLASS_NAMES, VoxelDataset, load_cache, load_points, read_binvox, voxel_path
+from dataset.shapenet import VoxelDataset, load_cache, read_binvox, voxel_path
 from evaluate import load_head
 from metrics import chamfer_fscore
 from models.retr import RETR

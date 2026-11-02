@@ -9,7 +9,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from dataset.shapenet import CLASS_IDS, TRANSFORM, load_points, read_split
+from dataset.shapenet import TRANSFORM, load_points, read_split
 from evaluate import load_head, load_vit
 from metrics import chamfer_fscore
 from models.rgb2point import build_model
