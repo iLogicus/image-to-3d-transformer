@@ -65,7 +65,7 @@ def main():
     start_epoch, best_iou = 0, 0.0
     last_path = os.path.join(out_dir, "last.pt")
     if os.path.exists(last_path):
-        ckpt = torch.load(last_path, map_location=device)
+        ckpt = torch.load(last_path, map_location="cpu")
         model.load_state_dict(ckpt["model"])
         optimizer.load_state_dict(ckpt["optimizer"])
         train_loader.generator.set_state(ckpt["generator"])

@@ -77,7 +77,7 @@ def main():
     start_epoch, best_cd = 0, float("inf")
     last_path = os.path.join(out_dir, "last.pt")
     if os.path.exists(last_path):
-        ckpt = torch.load(last_path, map_location=device)
+        ckpt = torch.load(last_path, map_location="cpu")
         model.head.load_state_dict(ckpt["head"])
         model.vit.load_state_dict(ckpt["vit"])
         optimizer.load_state_dict(ckpt["optimizer"])
