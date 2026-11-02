@@ -65,7 +65,7 @@ def main():
         {"params": encoder_params, "lr": train_cfg["encoder_lr"]},
         {"params": decoder_params, "lr": train_cfg["lr"]},
     ], weight_decay=train_cfg["weight_decay"], fused=True)
-    # Baseline / V1 / V2: constant lr (official). V3: cosine decay to 0 over the epochs.
+    # Baseline, V1, V2: constant lr (official). V3, V4: cosine decay to 0 over the epochs.
     if train_cfg["scheduler"] == "cosine":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=train_cfg["epochs"])
     else:

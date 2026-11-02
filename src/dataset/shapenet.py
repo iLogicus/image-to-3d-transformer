@@ -161,7 +161,7 @@ def retr_transform(data_cfg):
     ])
 
 
-# V3 (baseline 2): training augmentation, same idea as V3 of baseline 1. Shift / zoom on the transparent image
+# V4 (baseline 2): training augmentation, same idea as V3 of baseline 1. Shift / zoom on the transparent image
 # (so new border pixels are transparent too), then a background of random colour, then colour jitter. No flip.
 RETR_SHAPE = transforms.Compose([
     transforms.CenterCrop(128),
@@ -190,7 +190,7 @@ class VoxelDataset(Dataset):
     # One sample = one rendered view + the 32^3 voxel grid of the object.
     # Train: one_view_per_object=True is the official 3D-RETR epoch (one random view of each object),
     # False uses every view in each epoch (as baseline 1). Val/test: only view 00 (official mode="first").
-    # augment=True (V3 training): RETR_SHAPE, random background colour, RETR_COLOR.
+    # augment=True (V4 training): RETR_SHAPE, random background colour, RETR_COLOR.
     def __init__(self, data_cfg, stage, all_views=False, augment=False):
         self.data_cfg = data_cfg
         self.augment = augment
