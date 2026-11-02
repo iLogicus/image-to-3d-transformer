@@ -20,6 +20,7 @@ from utils import get_device, load_config, set_seed
 # - voxels (baseline 2) -> 1024 points on the voxel surface -> CD / F-score against the 3D-LMNet ground truth points
 # - points (baseline 1) -> filled 32^3 voxels -> IoU against the R2N2 ground truth voxels
 # No information of the ground truth object is used to convert a prediction (only one axis rotation for all objects).
+CLOSING = 5  # best mean IoU of ground truth points -> voxels on 100 val objects per class (tried 2 to 6)
 
 
 def surface_points(voxels, n=1024, seed=0):
@@ -68,7 +69,10 @@ def points_to_voxels(points, axes):
     idx = ((q - (low + high) / 2) / side * 32 + 16).long().clamp(0, 31).numpy()
     grid = np.zeros((32, 32, 32), dtype=bool)
     grid[idx[:, 0], idx[:, 1], idx[:, 2]] = True
-    grid = ndimage.binary_closing(grid, iterations=1, border_value=0) | grid
+    # Close gaps between the sparse points (CLOSING iterations, chosen on val ground truth), padded so the
+    # border of the grid is not cut, then fill the inside (R2N2 voxels are solid)
+    padded = ndimage.binary_closing(np.pad(grid, CLOSING), iterations=CLOSING)
+    grid = padded[CLOSING:-CLOSING, CLOSING:-CLOSING, CLOSING:-CLOSING] | grid
     return torch.from_numpy(ndimage.binary_fill_holes(grid))
 
 
