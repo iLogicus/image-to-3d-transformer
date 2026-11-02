@@ -1,5 +1,6 @@
-# CI: tests on every push / pull request. CD (push to main or manual run): Docker image to GitHub Container Registry,
-# then the same app to a Hugging Face Space (Docker SDK).
+# CI: tests on every push / pull request, then the Docker image is built and smoke tested.
+# CD (push to main or manual run): the image goes to GitHub Container Registry, and the same app to a
+# Hugging Face Space (Docker SDK). The two CD jobs are independent.
 # Repo settings needed for deploy: secret HF_TOKEN (write token) and variable HF_SPACE (user/space); variable
 # WEIGHTS_REPO is optional (default in src/demo.py). Without HF_TOKEN the deploy step is skipped.
 name: CI/CD
@@ -14,8 +15,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -30,24 +31,32 @@ jobs:
   docker:
     needs: test
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build -f docker/Dockerfile -t image-to-3d .
+      - name: Smoke test (server starts, /health answers)
+        run: |
+          docker run -d -p 7860:7860 --name app image-to-3d
+          for i in $(seq 30); do curl -sf localhost:7860/health && exit 0; sleep 2; done
+          docker logs app
+          exit 1
+
+  ghcr:
+    needs: docker
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: docker build -f docker/Dockerfile -t ghcr.io/${GITHUB_REPOSITORY,,}:latest .
-      - name: Smoke test (server starts, /health answers)
+      - uses: actions/checkout@v5
+      - name: Build and push to GitHub Container Registry
         run: |
-          docker run -d -p 7860:7860 --name app ghcr.io/${GITHUB_REPOSITORY,,}:latest
-          for i in $(seq 30); do curl -sf localhost:7860/health && exit 0; sleep 2; done
-          docker logs app
-          exit 1
-      - name: Push to GitHub Container Registry
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:latest
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/${GITHUB_REPOSITORY,,}:latest
+          docker build -f docker/Dockerfile -t $IMAGE .
+          docker push $IMAGE
 
   deploy:
     needs: docker
@@ -58,7 +67,7 @@ jobs:
       HF_SPACE: ${{ vars.HF_SPACE }}
       WEIGHTS_REPO: ${{ vars.WEIGHTS_REPO }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Deploy to Hugging Face Space
         if: env.HF_TOKEN != ''
         run: |
