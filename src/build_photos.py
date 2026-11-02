@@ -78,8 +78,8 @@ def sheet(raw_dir, out_dir, sheet_path, size=160):
 
 
 def chamfer(a, b):
-    # Mean squared distance to the nearest point, both directions (same definition as metrics.py)
-    d = torch.cdist(a, b) ** 2
+    # Mean distance to the nearest point, both directions (same definition as chamfer_fscore in metrics.py)
+    d = torch.cdist(a, b)
     return (d.min(1).values.mean() + d.min(0).values.mean()).item()
 
 
