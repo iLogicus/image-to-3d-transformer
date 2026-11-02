@@ -1,4 +1,4 @@
-# CPU image of the demo: FastAPI + Gradio on port 7860 (same port as Hugging Face Spaces).
+# CPU image of the demo: FastAPI + Gradio on port 7860.
 # Build from the repo root: docker build -f docker/Dockerfile -t image-to-3d .
 # Run: docker compose up (see docker-compose.yml), or
 #      docker run --rm -p 7860:7860 -v hf-cache:/home/user/.cache/huggingface image-to-3d
@@ -6,7 +6,7 @@ FROM python:3.12-slim
 # Links the image on GitHub Container Registry to the repo (lets the CI token push it)
 LABEL org.opencontainers.image.source="https://github.com/iLogicus/image-to-3d-transformer"
 
-# Hugging Face Spaces runs the container as user 1000
+# Run as a normal user (uid 1000), not root
 RUN useradd -m -u 1000 user
 WORKDIR /app
 

@@ -1,8 +1,8 @@
 # CI: tests on every push / pull request, then the Docker image is built and smoke tested.
-# CD (push to main or manual run): the image goes to GitHub Container Registry, and the same app to a
-# Hugging Face Space (Docker SDK). The two CD jobs are independent.
-# Repo settings needed for deploy: secret HF_TOKEN (write token) and variable HF_SPACE (user/space); variable
-# WEIGHTS_REPO is optional (default in src/demo.py). Without HF_TOKEN the deploy step is skipped.
+# CD (push to main or manual run): the image goes to GitHub Container Registry, and the same image is deployed to
+# Google Cloud Run (public URL). The two CD jobs are independent.
+# Repo settings needed for deploy: secret GCP_SA_KEY (service account key JSON), variables GCP_PROJECT and
+# GCP_REGION. Without GCP_SA_KEY the deploy steps are skipped.
 name: CI/CD
 
 on:
@@ -63,13 +63,28 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      HF_SPACE: ${{ vars.HF_SPACE }}
-      WEIGHTS_REPO: ${{ vars.WEIGHTS_REPO }}
+      HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+      REGION: ${{ vars.GCP_REGION }}
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/image-to-3d/app:latest
     steps:
       - uses: actions/checkout@v5
-      - name: Deploy to Hugging Face Space
-        if: env.HF_TOKEN != ''
+      - uses: google-github-actions/auth@v3
+        if: env.HAS_KEY == 'true'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v3
+        if: env.HAS_KEY == 'true'
+      - name: Build and push to Artifact Registry
+        if: env.HAS_KEY == 'true'
         run: |
-          pip install huggingface_hub==2.4.0
-          bash docker/deploy_space.sh
+          gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+          docker build -f docker/Dockerfile -t $IMAGE .
+          docker push $IMAGE
+      - name: Deploy to Cloud Run
+        if: env.HAS_KEY == 'true'
+        # 8 GB: the 4 models (~3 GB) plus the downloaded weights, kept in memory by Cloud Run.
+        # 0 to 1 instance: free when nobody uses it, first request after a pause takes about a minute.
+        run: |
+          gcloud run deploy image-to-3d --image $IMAGE --region $REGION --port 7860 \
+            --memory 8Gi --cpu 2 --min-instances 0 --max-instances 1 --timeout 300 \
+            --allow-unauthenticated
