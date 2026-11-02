@@ -114,7 +114,7 @@ def test_api():
 
 
 def test_build_photos():
-    from build_photos import build, evaluate
+    from build_photos import build, evaluate, sheet
 
     raw, out = tempfile.mkdtemp(), tempfile.mkdtemp()
     for obj in ["a", "b"]:
@@ -126,6 +126,10 @@ def test_build_photos():
     evaluate(out, result)
     r = json.load(open(result))
     assert set(r) == set(MODELS) and r["b1_v3"]["chair"]["cd_same_object"] is not None
+    manifest = json.load(open(os.path.join(out, "manifest.json")))
+    assert len(manifest) == 4 and "date_taken" in manifest[0] and "camera" in manifest[0]
+    sheet(raw, out, os.path.join(out, "sheet.png"))
+    assert Image.open(os.path.join(out, "sheet.png")).size == (4 * 160, 2 * 180)
 
 
 def test_sample_tab():
