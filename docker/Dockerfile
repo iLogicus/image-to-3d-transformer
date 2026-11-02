@@ -1,7 +1,7 @@
 # CPU image of the demo: FastAPI + Gradio on port 7860 (same port as Hugging Face Spaces).
 # Build from the repo root: docker build -f docker/Dockerfile -t image-to-3d .
-# Run: docker run --rm -p 7860:7860 -e WEIGHTS_REPO=iLogicus/image-to-3d-weights \
-#        -v hf-cache:/home/user/.cache/huggingface image-to-3d
+# Run: docker compose up (see docker-compose.yml), or
+#      docker run --rm -p 7860:7860 -v hf-cache:/home/user/.cache/huggingface image-to-3d
 FROM python:3.12-slim
 
 # Hugging Face Spaces runs the container as user 1000

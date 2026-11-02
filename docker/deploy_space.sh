@@ -1,11 +1,12 @@
 #!/bin/bash
-# Upload the demo to a Hugging Face Space (Docker SDK). Needs HF_TOKEN, HF_SPACE (user/space), WEIGHTS_REPO.
+# Upload the demo to a Hugging Face Space (Docker SDK). Needs HF_TOKEN and HF_SPACE (user/space).
+# WEIGHTS_REPO is optional (default in src/demo.py).
 # The Space needs its Dockerfile and a README with the Space settings at its root, so they are made here.
 set -e
 mkdir -p space
 cp -r src app api requirements-demo.txt space/
 cp docker/Dockerfile space/Dockerfile
-echo "ENV WEIGHTS_REPO=$WEIGHTS_REPO" >> space/Dockerfile
+if [ -n "$WEIGHTS_REPO" ]; then echo "ENV WEIGHTS_REPO=$WEIGHTS_REPO" >> space/Dockerfile; fi
 cat > space/README.md <<END
 ---
 title: Image to 3D Transformer

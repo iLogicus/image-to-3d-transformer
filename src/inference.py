@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import torch
 import trimesh
@@ -6,7 +7,6 @@ from PIL import Image
 
 from dataset.shapenet import TRANSFORM
 from models.rgb2point import build_model
-from utils import get_device, load_config
 
 
 def load_model(cfg, ckpt_path, device):
@@ -26,18 +26,22 @@ def predict(image, model, device):
 
 
 def main():
+    # Command line reconstruction with the demo weights (downloaded from the Hugging Face Hub, no Colab needed):
+    # python src/inference.py --image chair.jpg --model b1_v3   ->  outputs/inference/chair_b1_v3.ply (+ .glb)
+    from demo import MODELS, reconstruct, save_result
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/rgb2point.yaml")
     parser.add_argument("--image", required=True)
-    parser.add_argument("--ckpt", required=True)
-    parser.add_argument("--out", default="outputs/result.ply")
+    parser.add_argument("--model", default="b1_v3", choices=list(MODELS))
+    parser.add_argument("--keep_background", action="store_true", help="do not remove the background")
+    parser.add_argument("--out_dir", default="outputs/inference")
     args = parser.parse_args()
 
-    device = get_device()
-    model = load_model(load_config(args.config), args.ckpt, device)
-    points = predict(Image.open(args.image), model, device)
-    trimesh.PointCloud(points).export(args.out)
-    print("Saved", args.out)
+    result = reconstruct(Image.open(args.image), args.model, not args.keep_background)
+    stem = os.path.splitext(os.path.basename(args.image))[0] + "_" + args.model
+    viewer, download = save_result(result, args.out_dir, stem)
+    print(f"{MODELS[args.model]}: {result['note']}, {result['time_ms']:.0f} ms")
+    print("Saved", download, "and", viewer)
 
 
 if __name__ == "__main__":

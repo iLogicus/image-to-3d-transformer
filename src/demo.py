@@ -24,7 +24,9 @@ MODELS = {
     "retr_s": "Baseline 2: 3D-RETR-S (voxels)",
 }
 WEIGHTS_DIR = os.environ.get("WEIGHTS_DIR", "weights")
-WEIGHTS_REPO = os.environ.get("WEIGHTS_REPO")  # Hugging Face model repo with the weight files (for Docker / Spaces)
+# Public Hugging Face model repo with the weight files and test samples (made on Colab by export_demo.py and
+# export_samples.py), downloaded once into the Hugging Face cache, so the demo runs without Colab or Drive.
+WEIGHTS_REPO = os.environ.get("WEIGHTS_REPO") or "iLogicus/image-to-3d-weights"
 
 FILL = 0.7  # the object takes 70% of the image side, as in the ShapeNet renderings (same as eval_pix3d.py)
 BACKGROUND = (0, 0, 0)  # transparent pixels of the renderings are black after convert("RGB")
@@ -44,8 +46,6 @@ def weight_file(name):
     path = os.path.join(WEIGHTS_DIR, name + ".pt")
     if os.path.exists(path):
         return path
-    if WEIGHTS_REPO is None:
-        raise FileNotFoundError(f"{path} not found and WEIGHTS_REPO is not set")
     from huggingface_hub import hf_hub_download
     return hf_hub_download(WEIGHTS_REPO, name + ".pt")
 
