@@ -59,9 +59,9 @@ Environment: Google Colab Pro, NVIDIA L4 24 GB, bf16, Python 3.13, PyTorch 2.11,
 
 | Member | Work |
 |---|---|
-| Đỗ Nguyễn Hữu Phúc (SE204297) | Data, baselines, all versions, demo, API, Docker, CI/CD, report |
-| Nguyễn Tiến Vinh (SE204328) | Report review, screenshots |
-| Phạm Trường Minh Nhật (SE205274) | Slides, demo video |
+| Đỗ Nguyễn Hữu Phúc | Data, baselines, all versions, demo, API, Docker, CI/CD, report |
+| Nguyễn Tiến Vinh | Report review, screenshots |
+| Phạm Trường Minh Nhật | Slides, demo video |
 
 AI use (Claude, Anthropic) is declared in the report, Appendix B.
 
